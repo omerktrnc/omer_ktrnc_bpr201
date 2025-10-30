@@ -1,0 +1,49 @@
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f4;
+    margin: 0;
+}
+.admin-container {
+    width: 90%;
+    margin: 20px auto;
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+h1 { text-align: center; color: #333; }
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+table th, table td {
+    border: 1px solid #ddd;
+    padding: 10px;
+    text-align: left;
+}
+table th {
+    background-color: #f2f2f2;
+}
+table tr:nth-child(even) { background-color: #f9f9f9; }
+table tr:hover { background-color: #f1f1f1; }
+.action-link {
+    text-decoration: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    color: white;
+    margin-right: 5px;
+}
+.onayla-link { background-color: #5cb85c; }
+.reddet-link { background-color: #d9534f; }
+.onayla-link:hover { background-color: #4cae4c; }
+.reddet-link:hover { background-color: #c9302c; }
+.admin-nav {
+    background: #333; padding: 10px; text-align: center; margin-bottom: 20px;
+}
+.admin-nav a { color: white; text-decoration: none; padding: 0 15px; font-weight: bold; }
+.message {
+    padding: 15px; border-radius: 5px; margin-bottom: 15px; text-align: center;
+}
+.error { background: #fdd; border: 1px solid red; color: red; }
+.success { background: #dfd; border: 1px solid green; color: green; }
