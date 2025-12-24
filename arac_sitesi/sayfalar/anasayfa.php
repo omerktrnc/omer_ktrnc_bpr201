@@ -1,81 +1,118 @@
 <?php
-/* sayfalar/anasayfa.php
-   Bu sayfa, ana index.php'nin İÇİNDE çalıştığı için,
-   $db değişkenine (veritabanı bağlantısı) zaten sahiptir.
-   Biz burada sadece anasayfaya özel olan "ilanları çekme" işini yapacağız.
-*/
+// 1. ADIM: Arama ve Sıralama Mantığı
+$kelime = isset($_GET['kelime']) ? $_GET['kelime'] : '';
+$sehir = isset($_GET['sehir']) ? $_GET['sehir'] : '';
+$sirala = isset($_GET['sirala']) ? $_GET['sirala'] : 'tarih_yeni';
 
-// Veritabanından ONAYLANMIŞ ilanları çek
-try {
-    // Sadece durumu 'onaylandi' olanları al ve en yeniden eskiye sırala
-    $stmt_ilanlar = $db->prepare("SELECT * FROM ilanlar WHERE durum = 'onaylandi' ORDER BY ilan_tarihi DESC");
-    $stmt_ilanlar->execute();
-    $ilanlar = $stmt_ilanlar->fetchAll(PDO::FETCH_ASSOC);
+$sorgu = "SELECT * FROM ilanlar WHERE durum = 'onaylandi'";
 
-} catch (PDOException $e) {
-    // Hata olursa göster
-    die("Veritabanı hatası: " . $e->getMessage());
+if (!empty($kelime)) {
+    $sorgu .= " AND (baslik LIKE :kelime OR marka LIKE :kelime OR model LIKE :kelime)";
+}
+if (!empty($sehir)) {
+    $sorgu .= " AND il = :sehir";
 }
 
+// Sıralama Seçenekleri
+switch ($sirala) {
+    case 'fiyat_artan':  $order = "fiyat ASC"; break;
+    case 'fiyat_azalan': $order = "fiyat DESC"; break;
+    case 'km_artan':     $order = "km ASC"; break;
+    case 'yil_azalan':   $order = "yil DESC"; break;
+    default:             $order = "ilan_tarihi DESC"; break;
+}
+$sorgu .= " ORDER BY $order";
+
+$stmt = $db->prepare($sorgu);
+if (!empty($kelime)) { $stmt->bindValue(':kelime', '%'.$kelime.'%'); }
+if (!empty($sehir)) { $stmt->bindValue(':sehir', $sehir); }
+$stmt->execute();
+$ilanlar = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
-<div class="container">
-        <h1>Ana Sayfa - Satılık Araçlar</h1>
-        
-        <?php 
-        // İlan kaydederken gelen başarı/hata mesajlarını göster
-        if (isset($_SESSION['error_message'])) {
-            echo '<div class="error">' . $_SESSION['error_message'] . '</div>';
-            unset($_SESSION['error_message']); 
-        }
-        if (isset($_SESSION['success_message'])) {
-            echo '<div class="success">' . $_SESSION['success_message'] . '</div>';
-            unset($_SESSION['success_message']); 
-        }
-        ?>
 
-        <div class="ilan-listesi">
+<div class="container mt-4">
+    <div class="card border-0 shadow-sm p-4 mb-4 bg-light">
+        <form action="index.php" method="GET" class="row g-2">
+            <input type="hidden" name="sayfa" value="anasayfa">
+            <div class="col-md-4">
+                <input type="text" name="kelime" class="form-control" placeholder="Marka, model veya ilan başlığı..." value="<?php echo htmlspecialchars($kelime); ?>">
+            </div>
+            <div class="col-md-3">
+                <select name="sehir" class="form-select">
+                    <option value="">Tüm Şehirler</option>
+                    <option value="İstanbul">İstanbul</option>
+                    <option value="Ankara">Ankara</option>
+                    <option value="İzmir">İzmir</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select name="sirala" class="form-select">
+                    <option value="tarih_yeni">İlan Tarihi (Önce En Yeni)</option>
+                    <option value="fiyat_artan" <?php if($sirala=='fiyat_artan') echo 'selected'; ?>>Fiyat (Önce En Düşük)</option>
+                    <option value="fiyat_azalan" <?php if($sirala=='fiyat_azalan') echo 'selected'; ?>>Fiyat (Önce En Yüksek)</option>
+                    <option value="km_artan" <?php if($sirala=='km_artan') echo 'selected'; ?>>KM (Önce En Düşük)</option>
+                    <option value="yil_azalan" <?php if($sirala=='yil_azalan') echo 'selected'; ?>>Yıl (Önce En Yeni)</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">Ara / Filtrele</button>
+            </div>
+        </form>
+    </div>
 
-            <?php
-            // Eğer hiç onaylanmış ilan yoksa
-            if (count($ilanlar) == 0) {
-                echo "<p>Gösterilecek onaylanmış ilan bulunmamaktadır.</p>";
-            } else {
-                
-                // Onaylanmış ilanlar varsa, her bir ilan için dön (foreach döngüsü)
-                foreach ($ilanlar as $ilan) {
-                    
-                    // --- Her ilanın ilk resmini bul ---
-                    $stmt_resim = $db->prepare("SELECT resim_yolu FROM resimler WHERE ilan_id = ? LIMIT 1");
-                    $stmt_resim->execute([$ilan['id']]);
-                    $ilk_resim = $stmt_resim->fetch(PDO::FETCH_ASSOC);
-
-                    // Resim bulunduysa yolunu al, bulunamadıysa varsayılan resim kullan
-                    if ($ilk_resim) {
-                        $resim_yolu = 'uploads/' . htmlspecialchars($ilk_resim['resim_yolu']);
-                    } else {
-                        // Eğer hiç resmi yoksa (ki bizim sistemde zorunlu ama garanti olsun)
-                        $resim_yolu = 'https://via.placeholder.com/300x200?text=Resim+Yok';
-                    }
-                    // --- İlk resim bulma bitti ---
-
-                    // Şimdi bu ilanın HTML kartını ekrana bas
-                    // Şimdi bu ilanın HTML kartını ekrana bas
-                    // Kartın tamamını, ilanın detay sayfasına giden bir link yap
-                    echo '<a href="index.php?sayfa=ilan-detay&id=' . $ilan['id'] . '" class="ilan-kart-link">';
-                    echo '  <div class="ilan-kart">';
-                    echo '      <img src="' . $resim_yolu . '" alt="' . htmlspecialchars($ilan['baslik']) . '">';
-                    echo '      <div class="ilan-kart-body">';
-                    echo '          <h3>' . htmlspecialchars($ilan['baslik']) . '</h3>';
-                    // number_format ile fiyata binlik ayraç (1.000.000) ekleyelim
-                    echo '          <p class="ilan-fiyat">' . number_format($ilan['fiyat'], 0, ',', '.') . ' TL</p>';
-                    echo '          <p>' . htmlspecialchars($ilan['marka']) . ' ' . htmlspecialchars($ilan['model']) . ' (' . htmlspecialchars($ilan['yil']) . ')</p>';
-                    echo '      </div>';
-                    echo '  </div>';
-                    echo '</a>';
-
-                } // foreach döngüsü biter
-            } // else biter
-            ?>
-            
-        </div>
-        </div>
+    <div class="table-responsive bg-white shadow-sm rounded">
+        <table class="table table-hover align-middle mb-0" style="font-size: 14px;">
+            <thead class="table-light">
+                <tr class="text-secondary text-uppercase" style="font-size: 12px;">
+                    <th style="width: 130px;"></th>
+                    <th>Marka</th>
+                    <th>Model</th>
+                    <th>İlan Başlığı</th>
+                    <th>Yıl</th>
+                    <th>KM</th>
+                    <th>Fiyat</th>
+                    <th>Tarih</th>
+                    <th>İl / İlçe</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (count($ilanlar) == 0): ?>
+                    <tr><td colspan="9" class="text-center py-5 text-muted">Aradığınız kriterlere uygun ilan bulunamadı.</td></tr>
+                <?php else: ?>
+                    <?php foreach ($ilanlar as $ilan): 
+                        // Resim Bulma
+                        $stmt_resim = $db->prepare("SELECT resim_yolu FROM resimler WHERE ilan_id = ? LIMIT 1");
+                        $stmt_resim->execute([$ilan['id']]);
+                        $resim = $stmt_resim->fetch(PDO::FETCH_ASSOC);
+                        $resim_yolu = $resim ? 'uploads/' . $resim['resim_yolu'] : 'img/no-image.jpg';
+                    ?>
+                    <tr onclick="window.location='index.php?sayfa=ilan-detay&id=<?php echo $ilan['id']; ?>'" style="cursor: pointer;">
+                        <td>
+                            <img src="<?php echo $resim_yolu; ?>" class="rounded" style="width: 110px; height: 80px; object-fit: cover;">
+                        </td>
+                        <td class="fw-bold"><?php echo htmlspecialchars($ilan['marka']); ?></td>
+                        <td><?php echo htmlspecialchars($ilan['model']); ?></td>
+                        <td class="text-primary fw-medium"><?php echo htmlspecialchars($ilan['baslik']); ?></td>
+                        <td><?php echo $ilan['yil']; ?></td>
+                        <td><?php echo number_format($ilan['km'], 0, ',', '.'); ?></td>
+                        <td class="fw-bold text-danger fs-6"><?php echo number_format($ilan['fiyat'], 0, ',', '.'); ?> TL</td>
+                        <td class="text-muted" style="white-space: nowrap;"><?php echo date('d.m.Y', strtotime($ilan['ilan_tarihi'])); ?></td>
+                        <td class="text-muted"><?php echo htmlspecialchars($ilan['il']); ?> / <?php echo htmlspecialchars($ilan['ilce']); ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div><style>
+    .table-hover tbody tr:hover {
+        background-color: #fcfcfc !important;
+        transition: 0.3s;
+    }
+    .table img {
+        transition: transform .2s;
+    }
+    .table tr:hover img {
+        transform: scale(1.05);
+    }
+</style>

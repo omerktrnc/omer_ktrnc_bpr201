@@ -1,72 +1,31 @@
 <?php
-// Oturumu başlat
-session_start();
+session_start(); // 1. Kural: Her zaman en üstte
+include 'db.php'; 
 
-// Veritabanı bağlantımızı çağır
-include 'db.php';
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    // Formdan gelen verileri alıyoruz
+    $email = trim($_POST['email']);
+    $sifre = $_POST['sifre'];
 
-// Sadece POST metodu ile gelindiyse işlem yap
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    // 1. ADIM: Kullanıcıyı sadece E-POSTA ile çekiyoruz
+    // Şifreyi burada sorguya katmıyoruz çünkü veritabanındaki şifre hash'lenmiş durumda.
+    $sorgu = $db->prepare("SELECT * FROM kullanicilar WHERE email = ?");
+    $sorgu->execute([$email]);
+    $kullanici = $sorgu->fetch(PDO::FETCH_ASSOC);
 
-    // 1. Formdan verileri al
-    $email = htmlspecialchars($_POST['email']);
-    $sifre_form = $_POST['sifre']; // Hash'lenecek şifre değil, karşılaştırılacak şifre
-
-    // Boş alan kontrolü
-    if (empty($email) || empty($sifre_form)) {
-        $_SESSION['error_message'] = "Lütfen e-posta ve şifre alanlarını doldurun.";
-        header("Location: index.php?sayfa=login");
-        exit;
-    }
-
-    // 2. Veritabanından kullanıcıyı sorgula
-    try {
-        $stmt = $db->prepare("SELECT * FROM kullanicilar WHERE email = ?");
-        $stmt->execute([$email]);
+    // 2. ADIM: Kullanıcı bulundu mu ve şifre doğrulanıyor mu kontrol et
+    if ($kullanici && password_verify($sifre, $kullanici['sifre'])) {
         
-        // fetch() ile kullanıcıyı bir dizi olarak al
-        $kullanici = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        // 3. Kullanıcı var mı?
-        if ($kullanici) {
-            
-            // 4. Kullanıcı varsa, şifre doğru mu?
-            // password_verify() fonksiyonu, formdan gelen şifre ile DB'deki hash'lenmiş şifreyi karşılaştırır.
-            if (password_verify($sifre_form, $kullanici['sifre'])) {
-                
-                // GİRİŞ BAŞARILI!
-                // 5. Kullanıcı bilgilerini "hafızaya" (Session) kaydet
-                $_SESSION['user_id'] = $kullanici['id'];
-                $_SESSION['kullanici_adi'] = $kullanici['kullanici_adi'];
-                $_SESSION['is_admin'] = $kullanici['is_admin']; // Admin durumunu hafızaya al
-                
-                // Ana sayfaya yönlendir
-                header("Location: index.php");
-                exit;
-
-            } else {
-                // Şifre yanlış
-                $_SESSION['error_message'] = "Hatalı şifre girdiniz.";
-                header("Location: index.php?sayfa=login");
-                exit;
-            }
-
-        } else {
-            // E-posta bulunamadı
-            $_SESSION['error_message'] = "Bu e-posta adresi ile kayıtlı bir kullanıcı bulunamadı.";
-            header("Location: index.php?sayfa=login");
-            exit;
-        }
-
-    } catch (PDOException $e) {
-        $_SESSION['error_message'] = "Veritabanı hatası: " . $e->getMessage();
-        header("Location: index.php?sayfa=login");
-        exit;
+        // ŞİFRE DOĞRU: Oturum bilgilerini mühürlüyoruz
+        $_SESSION['user_id'] = $kullanici['id'];
+        $_SESSION['kullanici_adi'] = $kullanici['kullanici_adi'];
+        
+        // Giriş başarılı, ana sayfaya yönlendir
+        header("Location: index.php"); 
+        exit();
+    } else {
+        // ŞİFRE VEYA E-POSTA HATALI
+        echo "<script>alert('E-posta veya şifre hatalı!'); window.location.href='sayfalar/login.php';</script>";
     }
-
-} else {
-    // POST ile gelinmediyse ana sayfaya yolla
-    header("Location: index.php");
-    exit;
 }
 ?>

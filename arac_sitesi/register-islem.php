@@ -1,83 +1,35 @@
 <?php
-// Oturumu başlat
 session_start();
+include 'db.php'; // Veritabanı bağlantı değişkenin: $db
 
-// Veritabanı bağlantımızı çağır
-include 'db.php';
-
-// POST ile veri gelip gelmediğini kontrol et
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-
-    // 1. Formdan gelen verileri al ve temizle
-    // (htmlspecialchars ile XSS açığını basitçe engelliyoruz)
-    $kullanici_adi = htmlspecialchars($_POST['kullanici_adi']);
-    $email = htmlspecialchars($_POST['email']);
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    // 1. Formdan gelen verileri temizleyerek alıyoruz
+    $k_ad = trim($_POST['k_ad']);
+    $email = trim($_POST['email']);
     $sifre = $_POST['sifre'];
-    $sifre_tekrar = $_POST['sifre_tekrar'];
 
-    // 2. Basit Doğrulamalar
-    // Boş alan var mı?
-    if (empty($kullanici_adi) || empty($email) || empty($sifre) || empty($sifre_tekrar)) {
-        $_SESSION['error_message'] = "Lütfen tüm alanları doldurun.";
-        header("Location: index.php?sayfa=register"); 
-        exit; // Kodu burada durdur
+    // 2. MÜHÜR: Kullanıcı adı veya E-posta zaten var mı kontrolü
+    $kontrol_sorgu = $db->prepare("SELECT * FROM kullanicilar WHERE kullanici_adi = ? OR email = ?");
+    $kontrol_sorgu->execute([$k_ad, $email]);
+
+    if ($kontrol_sorgu->rowCount() > 0) {
+        // Eğer veritabanında bu bilgilerden biri varsa işlemi durduruyoruz
+        echo "<script>alert('Hata: Bu kullanıcı adı veya e-posta adresi zaten kullanımda!'); window.history.back();</script>";
+        exit();
     }
 
-    // Şifreler uyuşuyor mu?
-    if ($sifre != $sifre_tekrar) {
-        $_SESSION['error_message'] = "Şifreler birbirleriyle uyuşmuyor.";
-        header("Location: index.php?sayfa=register");
-        exit;
-    }
-
-    // 3. E-posta adresi zaten kayıtlı mı?
-    try {
-        $stmt = $db->prepare("SELECT id FROM kullanicilar WHERE email = ?");
-        $stmt->execute([$email]);
-        
-        if ($stmt->fetch()) {
-            // Eğer fetch() bir sonuç döndürürse, bu email kayıtlıdır
-            $_SESSION['error_message'] = "Bu e-posta adresi zaten kayıtlı.";
-            header("Location: index.php?sayfa=register");
-            exit;
-        }
-
-    } catch (PDOException $e) {
-        $_SESSION['error_message'] = "Veritabanı hatası: " . $e->getMessage();
-        header("Location: index.php?sayfa=register");
-        exit;
-    }
-
-
-    // 4. Şifreyi Hash'leme (Güvenlik için çok önemli!)
-    // Şifreyi ASLA veritabanına olduğu gibi kaydetmeyiz.
+    // 3. GÜVENLİK: Şifreyi veritabanında gizli (hash) olarak saklıyoruz
     $hashed_sifre = password_hash($sifre, PASSWORD_DEFAULT);
 
-
-    // 5. Veritabanına Ekleme (INSERT)
     try {
-        // Hazırlıklı ifadeler (Prepared Statements) SQL Injection'ı engeller
-        $stmt = $db->prepare("INSERT INTO kullanicilar (kullanici_adi, email, sifre) VALUES (?, ?, ?)");
+        // 4. KAYIT İŞLEMİ: Tüm kontroller geçtiyse veriyi ekliyoruz
+        $ekle = $db->prepare("INSERT INTO kullanicilar (kullanici_adi, email, sifre, rol) VALUES (?, ?, ?, 'user')");
+        $ekle->execute([$k_ad, $email, $hashed_sifre]);
         
-        // Sorguyu çalıştır
-        $stmt->execute([$kullanici_adi, $email, $hashed_sifre]);
-
-        // Başarılı olursa...
-        $_SESSION['success_message'] = "Kayıt başarılı! Şimdi giriş yapabilirsiniz.";
-        header("Location: index.php?sayfa=login"); // Giriş sayfasına yönlendir
-        exit;
-
+        echo "<script>alert('Kayıt Başarılı! Giriş yapabilirsiniz.'); window.location.href='sayfalar/login.php';</script>";
     } catch (PDOException $e) {
-        // Bir hata olursa...
-        $_SESSION['error_message'] = "Kayıt sırasında bir hata oluştu: " . $e->getMessage();
-        header("Location: index.php?sayfa=register");
-        exit;
+        // Veritabanı kaynaklı beklenmedik bir hata olursa burası çalışır
+        echo "<script>alert('Beklenmedik bir hata oluştu: " . $e->getMessage() . "'); window.history.back();</script>";
     }
-
-} else {
-    // Eğer bu sayfaya POST ile gelinmediyse (örn: tarayıcıdan direkt adres yazıldıysa)
-    // Ana sayfaya yolla
-    header("Location: index.php");
-    exit;
 }
 ?>
